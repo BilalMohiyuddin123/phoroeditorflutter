@@ -52,7 +52,11 @@ class _HomePageState extends State<HomePage> {
     'None': '',
     'Dust': 'assets/textures/dust.png',
     'Grain': 'assets/textures/bedge-grunge.png',
-    'Scratches': 'assets/textures/dust.png',
+    'Scratches': 'assets/textures/black-orchid.png',
+    'Gray': 'assets/textures/gray-paper.png',
+    'Snow': 'assets/textures/nice-snow.png',
+    'Midnight': 'assets/textures/mid.png',
+    'Midnight2': 'assets/textures/mid2.png'
   };
   // ------------------------------------------
 
@@ -93,7 +97,7 @@ class _HomePageState extends State<HomePage> {
       _textOnImage = "";
       _editMode = EditMode.none;
       _selectedOverlayUrl = '';
-      _overlayIntensity = 0.5;
+      _overlayIntensity = 0.3;
     });
   }
 
