@@ -2,32 +2,29 @@
 import 'package:flutter/material.dart';
 
 class EffectsPanel extends StatelessWidget {
-  // Existing properties
-  final double blur;
+  // Vignette
   final bool vignette;
-  final Function(double) onBlurChanged;
   final Function(bool) onVignetteChanged;
 
-  // NEW PROPERTIES
+  // Grain/Overlay
   final Map<String, String> overlayOptions;
   final String selectedOverlayUrl;
   final double overlayIntensity;
   final Function(String) onOverlayChanged;
   final Function(double) onOverlayIntensityChanged;
 
+  // (Chroma properties removed)
+
   const EffectsPanel({
     super.key,
-    // Existing
-    required this.blur,
     required this.vignette,
-    required this.onBlurChanged,
     required this.onVignetteChanged,
-    // NEW
     required this.overlayOptions,
     required this.selectedOverlayUrl,
     required this.overlayIntensity,
     required this.onOverlayChanged,
     required this.onOverlayIntensityChanged,
+    // (Chroma params removed from constructor)
   });
 
   @override
@@ -38,43 +35,26 @@ class EffectsPanel extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // --- Blur Slider ---
-          Row(
-            children: [
-              // --- FIX IS HERE ---
-              const SizedBox(
-                width: 60,
-                child: Text('Blur', style: TextStyle(color: Colors.white)),
-              ),
-              Expanded(
-                child: Slider(
-                  value: blur,
-                  min: 0.0,
-                  max: 1.0,
-                  divisions: 10,
-                  label: (blur * 100).toStringAsFixed(0),
-                  onChanged: onBlurChanged,
-                ),
-              ),
-            ],
-          ),
           // --- Vignette Switch ---
           SwitchListTile(
-            title: const Text('Vignette', style: TextStyle(color: Colors.white)),
+            title:
+            const Text('Vignette', style: TextStyle(color: Colors.white)),
             value: vignette,
             onChanged: onVignetteChanged,
             activeColor: Colors.blue,
             dense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
           ),
+
           const Divider(color: Colors.white30),
 
-          // --- NEW: Overlay Selection ---
+          // --- Grain/Overlay Selection ---
           const Align(
             alignment: Alignment.centerLeft,
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-              child: Text('Overlays', style: TextStyle(color: Colors.white, fontSize: 16)),
+              child: Text('Grain',
+                  style: TextStyle(color: Colors.white, fontSize: 16)),
             ),
           ),
           SizedBox(
@@ -104,35 +84,60 @@ class EffectsPanel extends StatelessWidget {
             ),
           ),
 
-          // --- NEW: Overlay Intensity Slider ---
+          // --- Grain/Overlay Intensity Slider ---
           AnimatedOpacity(
             duration: const Duration(milliseconds: 300),
             opacity: selectedOverlayUrl.isNotEmpty ? 1.0 : 0.0,
             child: Visibility(
               visible: selectedOverlayUrl.isNotEmpty,
-              child: Row(
-                children: [
-                  // --- FIX IS HERE ---
-                  const SizedBox(
-                    width: 60,
-                    child: Text('Intensity', style: TextStyle(color: Colors.white)),
-                  ),
-                  Expanded(
-                    child: Slider(
-                      value: overlayIntensity,
-                      min: 0.0,
-                      max: 1.0,
-                      divisions: 20,
-                      label: (overlayIntensity * 100).toStringAsFixed(0),
-                      onChanged: onOverlayIntensityChanged,
-                    ),
-                  ),
-                ],
+              child: _buildSlider(
+                label: 'Intensity',
+                value: overlayIntensity,
+                onChanged: onOverlayIntensityChanged,
+                min: 0.0,
+                max: 1.0,
+                divisions: 20,
               ),
             ),
           ),
+
+          // (Divider and Chroma slider removed)
         ],
       ),
+    );
+  }
+
+  // --- Helper widget to build a labeled slider ---
+  Widget _buildSlider({
+    required String label,
+    required double value,
+    required Function(double) onChanged,
+    required double min,
+    required double max,
+    required int divisions,
+    String? displayValue,
+  }) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: displayValue ?? (value * 100).toStringAsFixed(0),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
     );
   }
 }

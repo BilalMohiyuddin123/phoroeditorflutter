@@ -24,6 +24,14 @@ class BottomBar extends StatelessWidget {
               icon: Icons.filter,
               label: 'Filters',
               mode: EditMode.filters),
+
+          // --- ADDED THIS NEW BUTTON ---
+          _buildButton(context,
+              icon: Icons.tune, // New icon
+              label: 'Adjust', // New label
+              mode: EditMode.adjust), // New mode
+          // -----------------------------
+
           _buildButton(context,
               icon: Icons.flare,
               label: 'Effects',

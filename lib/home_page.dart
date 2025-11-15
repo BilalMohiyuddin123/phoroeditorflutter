@@ -8,11 +8,11 @@ import 'bottom_bar.dart';
 import 'effects_panel.dart';
 import 'filters_panel.dart';
 import 'permissions_handler.dart';
-// import 'save_button.dart'; // We are replacing this
 import 'text_panel.dart';
-import 'preview_page.dart'; // <-- IMPORT THE NEW PAGE
+import 'preview_page.dart';
+import 'adjust_panel.dart';
 
-enum EditMode { none, filters, effects, text }
+enum EditMode { none, filters, adjust, effects, text }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -37,6 +37,7 @@ class _HomePageState extends State<HomePage> {
   bool _vignette = false;
   String _selectedOverlayUrl = '';
   double _overlayIntensity = 0.5;
+  // (Chroma state removed)
 
   // Text state
   String _textOnImage = "";
@@ -47,7 +48,13 @@ class _HomePageState extends State<HomePage> {
     shadows: [Shadow(blurRadius: 10, color: Colors.black)],
   );
 
-  // --- THIS IS THE ONLY CHANGE IN THE CODE ---
+  // --- Adjustment state ---
+  double _adjBrightness = 100.0;
+  double _adjContrast = 100.0;
+  double _adjSaturation = 100.0; // This is for the color matrix
+  double _adjSepia = 0.0;
+  // -----------------------------
+
   final Map<String, String> _overlayOptions = {
     'None': '',
     'Dust': 'assets/textures/dust.png',
@@ -58,7 +65,6 @@ class _HomePageState extends State<HomePage> {
     'Midnight': 'assets/textures/mid.png',
     'Midnight2': 'assets/textures/mid2.png'
   };
-  // ------------------------------------------
 
   @override
   void initState() {
@@ -98,6 +104,11 @@ class _HomePageState extends State<HomePage> {
       _editMode = EditMode.none;
       _selectedOverlayUrl = '';
       _overlayIntensity = 0.3;
+      // (Chroma reset removed)
+      _adjBrightness = 100.0;
+      _adjContrast = 100.0;
+      _adjSaturation = 100.0;
+      _adjSepia = 0.0;
     });
   }
 
@@ -162,20 +173,47 @@ class _HomePageState extends State<HomePage> {
           },
           imagePreviewProvider: FileImage(_image!),
         );
-      case EditMode.effects:
-        return EffectsPanel(
+
+      case EditMode.adjust:
+        return AdjustPanel(
+          // Blur
           blur: _blur,
-          vignette: _vignette,
           onBlurChanged: (value) {
             setState(() {
               _blur = value;
             });
           },
+          // Adjustments
+          brightness: _adjBrightness,
+          onBrightnessChanged: (value) {
+            setState(() {
+              _adjBrightness = value;
+            });
+          },
+          contrast: _adjContrast,
+          onContrastChanged: (value) {
+            setState(() {
+              _adjContrast = value;
+            });
+          },
+          sepia: _adjSepia,
+          onSepiaChanged: (value) {
+            setState(() {
+              _adjSepia = value;
+            });
+          },
+        );
+
+    // --- UPDATED EFFECTS CASE ---
+      case EditMode.effects:
+        return EffectsPanel(
+          vignette: _vignette,
           onVignetteChanged: (value) {
             setState(() {
               _vignette = value;
             });
           },
+          // Grain (Overlays)
           overlayOptions: _overlayOptions,
           selectedOverlayUrl: _selectedOverlayUrl,
           overlayIntensity: _overlayIntensity,
@@ -192,7 +230,10 @@ class _HomePageState extends State<HomePage> {
               _overlayIntensity = value;
             });
           },
+          // (Chroma params removed)
         );
+    // ----------------------------
+
       case EditMode.text:
         return TextPanel(
           onTextAdded: (text) {
@@ -208,16 +249,32 @@ class _HomePageState extends State<HomePage> {
   }
 
   ColorMatrix _getInterpolatedMatrix() {
+    // 1. Get the base filter
+    ColorMatrix filterMatrix;
     if (_currentFilterIntensity == 1.0) {
-      return _currentFilter;
+      filterMatrix = _currentFilter;
+    } else {
+      final List<double> from = FilterMatrix.none;
+      final List<double> to = _currentFilter;
+      final List<double> result = List.filled(20, 0.0);
+      for (int i = 0; i < 20; i++) {
+        result[i] = from[i] + (to[i] - from[i]) * _currentFilterIntensity;
+      }
+      filterMatrix = result;
     }
-    final List<double> from = FilterMatrix.none;
-    final List<double> to = _currentFilter;
-    final List<double> result = List.filled(20, 0.0);
-    for (int i = 0; i < 20; i++) {
-      result[i] = from[i] + (to[i] - from[i]) * _currentFilterIntensity;
-    }
-    return result;
+
+    // 2. Build adjustment matrix (We removed the Saturation slider,
+    //    but still use the value from state for the matrix calculation)
+    final adjMatrix = FilterMatrix.buildMatrix(
+      brightness: _adjBrightness,
+      contrast: _adjContrast,
+      saturation: _adjSaturation, // This is color saturation
+      sepia: _adjSepia,
+      hue: 0,
+    );
+
+    // 3. Multiply them together
+    return FilterMatrix.multiply(adjMatrix, filterMatrix);
   }
 
   @override
@@ -230,7 +287,7 @@ class _HomePageState extends State<HomePage> {
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: TextButton(
-                onPressed: _goToPreview, // Calls the new function
+                onPressed: _goToPreview,
                 child: const Text(
                   'Preview',
                   style: TextStyle(
@@ -262,11 +319,15 @@ class _HomePageState extends State<HomePage> {
             if (_image != null) ...[
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
+                // --- UPDATED HEIGHTS ---
                 height: _editMode == EditMode.none
                     ? 0
                     : _editMode == EditMode.effects
-                    ? 260
-                    : 180,
+                    ? 220 // Adjusted height (was 340)
+                    : _editMode == EditMode.adjust
+                    ? 220
+                    : 180, // Filters/Text height
+                // -----------------------
                 child: SingleChildScrollView(
                   child: _buildEditorPanel(),
                 ),
@@ -302,17 +363,21 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // (Helper widget _buildBaseImage removed)
+
+  // --- UPDATED WIDGET ---
   Widget _buildPhotoView() {
     return RepaintBoundary(
       key: _imagePreviewKey,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 1. Base Image
+          // --- 1. Base Image with Filters and Blur ---
+          // (Chroma stack removed, replaced with single base image)
           ClipRRect(
             child: ImageFiltered(
               imageFilter: ui.ImageFilter.blur(
-                sigmaX: _blur * 5,
+                sigmaX: _blur * 5, // This is the "simple blur"
                 sigmaY: _blur * 5,
               ),
               child: ColorFiltered(
@@ -324,8 +389,9 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
+          // --- END OF BASE IMAGE ---
 
-          // 2. Vignette
+          // 2. Vignette (Stays on top)
           if (_vignette)
             Positioned.fill(
               child: Container(
@@ -341,9 +407,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-          // 3. Overlay
-          // This code is now correct because _selectedOverlayUrl
-          // will point to a local asset.
+          // 3. Overlay (Stays on top)
           if (_selectedOverlayUrl.isNotEmpty && _overlayIntensity > 0.0)
             Positioned.fill(
               child: Opacity(
@@ -356,7 +420,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-          // 4. Text
+          // 4. Text (Stays on top)
           if (_textOnImage.isNotEmpty)
             Positioned.fill(
               child: Center(

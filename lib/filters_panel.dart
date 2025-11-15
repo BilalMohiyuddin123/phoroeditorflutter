@@ -13,6 +13,32 @@ class FilterMatrix {
     0, 0, 0, 1, 0,
   ];
 
+  // --- NEW MATRICES FOR CHROMA EFFECT ---
+  /// Keeps only the Red channel
+  static const ColorMatrix redOnly = [
+    1, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, // Zero out green
+    0, 0, 0, 0, 0, // Zero out blue
+    0, 0, 0, 1, 0,
+  ];
+
+  /// Keeps only the Green channel
+  static const ColorMatrix greenOnly = [
+    0, 0, 0, 0, 0, // Zero out red
+    0, 1, 0, 0, 0,
+    0, 0, 0, 0, 0, // Zero out blue
+    0, 0, 0, 1, 0,
+  ];
+
+  /// Keeps only the Blue channel
+  static const ColorMatrix blueOnly = [
+    0, 0, 0, 0, 0, // Zero out red
+    0, 0, 0, 0, 0, // Zero out green
+    0, 0, 1, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
+  // ------------------------------------
+
   /// Helper: linear interpolation
   static double _lerp(double a, double b, double t) => a + (b - a) * t;
 
@@ -24,6 +50,7 @@ class FilterMatrix {
     double hue = 0,
     double sepia = 0,
   }) {
+    // ... (rest of this function is unchanged)
     final b = brightness / 100;
     final c = contrast / 100;
     final s = saturation / 100;
@@ -106,12 +133,13 @@ class FilterMatrix {
   static ColorMatrix _combineMatrices(List<ColorMatrix> matrices) {
     ColorMatrix result = List<double>.from(none);
     for (final m in matrices) {
-      result = _multiply(result, m);
+      result = multiply(result, m); // Use the (now public) multiply
     }
     return result;
   }
 
-  static ColorMatrix _multiply(ColorMatrix a, ColorMatrix b) {
+  static ColorMatrix multiply(ColorMatrix a, ColorMatrix b) {
+    // ... (rest of this function is unchanged)
     final out = List<double>.filled(20, 0);
     for (var row = 0; row < 4; row++) {
       for (var col = 0; col < 5; col++) {
@@ -128,6 +156,7 @@ class FilterMatrix {
 
   /// === Filter Presets ===
   static const presets = {
+    // ... (all your presets are unchanged)
     'None': {
       'brightness': 100.0,
       'contrast': 100.0,
@@ -508,11 +537,10 @@ class FilterMatrix {
 }
 
 class FiltersPanel extends StatelessWidget {
+  // ... (rest of this class is unchanged)
   final Function(ColorMatrix) onFilterSelected;
   final double intensity;
   final Function(double) onIntensityChanged;
-
-  // === 1. ADDED THIS LINE ===
   final ImageProvider imagePreviewProvider;
 
   const FiltersPanel({
@@ -520,8 +548,6 @@ class FiltersPanel extends StatelessWidget {
     required this.onFilterSelected,
     required this.intensity,
     required this.onIntensityChanged,
-
-    // === 2. ADDED THIS LINE ===
     required this.imagePreviewProvider,
   });
 
@@ -569,7 +595,6 @@ class FiltersPanel extends StatelessWidget {
     );
   }
 
-  // === 3. UPDATED THIS ENTIRE METHOD ===
   Widget _buildFilterButton(String name, ColorMatrix matrix) {
     return InkWell(
       onTap: () => onFilterSelected(matrix),
@@ -589,13 +614,11 @@ class FiltersPanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: ColorFiltered(
                   colorFilter: ColorFilter.matrix(matrix),
-                  // Replaced Image.network with this:
                   child: Image(
-                    image: imagePreviewProvider, // Use the new provider
+                    image: imagePreviewProvider,
                     fit: BoxFit.cover,
                     width: 50,
                     height: 50,
-                    // Keep an error builder just in case
                     errorBuilder: (c, e, s) =>
                         Container(color: Colors.grey[400]),
                   ),
