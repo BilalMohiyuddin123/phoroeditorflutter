@@ -1,6 +1,6 @@
-//bottom_bar.dart
+// bottom_bar.dart
 import 'package:flutter/material.dart';
-import 'home_page.dart'; // For EditMode enum
+import 'home_page.dart'; // Ensures it can see the EditMode enum
 
 class BottomBar extends StatelessWidget {
   final Function(EditMode) onTap;
@@ -15,27 +15,30 @@ class BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 60,
-      color: Colors.grey[850],
+      height: 70, // Slightly taller for better touch targets
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        border: Border(top: BorderSide(color: Colors.white12, width: 0.5)),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Better spacing
         children: [
           _buildButton(context,
-              icon: Icons.filter,
+              icon: Icons.filter_vintage, // Updated Icon
               label: 'Filters',
               mode: EditMode.filters),
 
-          // --- ADDED THIS NEW BUTTON ---
           _buildButton(context,
-              icon: Icons.tune, // New icon
-              label: 'Adjust', // New label
-              mode: EditMode.adjust), // New mode
-          // -----------------------------
+              icon: Icons.tune,
+              label: 'Adjust',
+              mode: EditMode.adjust),
 
           _buildButton(context,
-              icon: Icons.flare,
+              icon: Icons.auto_fix_high, // Updated Icon
               label: 'Effects',
               mode: EditMode.effects),
+
+          // --- THE TEXT BUTTON ---
           _buildButton(context,
               icon: Icons.text_fields,
               label: 'Text',
@@ -49,19 +52,28 @@ class BottomBar extends StatelessWidget {
       {required IconData icon,
         required String label,
         required EditMode mode}) {
-    bool isSelected = currentMode == mode;
-    Color color = isSelected ? Colors.blue : Colors.white;
 
-    return InkWell(
+    final bool isSelected = currentMode == mode;
+    final Color color = isSelected ? Colors.blueAccent : Colors.grey;
+
+    return GestureDetector(
       onTap: () => onTap(mode),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      behavior: HitTestBehavior.opaque, // Ensures the whole area is clickable
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color),
+            Icon(icon, color: color, size: 26),
             const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: color, fontSize: 12)),
+            Text(
+                label,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+                )
+            ),
           ],
         ),
       ),

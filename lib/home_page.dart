@@ -4,14 +4,18 @@ import 'dart:ui' as ui;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:intl/intl.dart'; // Required for DateFormat
+
 import 'bottom_bar.dart';
 import 'effects_panel.dart';
 import 'filters_panel.dart';
 import 'permissions_handler.dart';
-import 'text_panel.dart';
+import 'text_panel.dart'; // Imports SmartTextPanel & TextLayer
+import 'photo_editor_screen.dart'; // Imports DraggableTextWidget
 import 'preview_page.dart';
 import 'adjust_panel.dart';
 
+// Ensure this Enum matches exactly what is used in BottomBar
 enum EditMode { none, filters, adjust, effects, text }
 
 class HomePage extends StatefulWidget {
@@ -37,33 +41,37 @@ class _HomePageState extends State<HomePage> {
   bool _vignette = false;
   String _selectedOverlayUrl = '';
   double _overlayIntensity = 0.5;
-  // (Chroma state removed)
 
-  // Text state
-  String _textOnImage = "";
-  TextStyle _textStyle = const TextStyle(
-    color: Colors.white,
-    fontSize: 40,
-    fontWeight: FontWeight.bold,
-    shadows: [Shadow(blurRadius: 10, color: Colors.black)],
-  );
+  // --- TEXT ENGINE STATE ---
+  List<TextLayer> textLayers = [];
+  String? selectedLayerId;
+
+  TextLayer? get activeLayer {
+    try {
+      return textLayers.firstWhere((e) => e.id == selectedLayerId);
+    } catch (e) {
+      return null;
+    }
+  }
+  // ----------------------------
 
   // --- Adjustment state ---
   double _adjBrightness = 100.0;
   double _adjContrast = 100.0;
-  double _adjSaturation = 100.0; // This is for the color matrix
+  double _adjSaturation = 100.0;
   double _adjSepia = 0.0;
-  // -----------------------------
 
   final Map<String, String> _overlayOptions = {
     'None': '',
     'Dust': 'assets/textures/dust.png',
     'Grain': 'assets/textures/bedge-grunge.png',
-    'Scratches': 'assets/textures/black-orchid.png',
     'Gray': 'assets/textures/gray-paper.png',
     'Snow': 'assets/textures/nice-snow.png',
-    'Midnight': 'assets/textures/mid.png',
-    'Midnight2': 'assets/textures/mid2.png'
+    'Midnight2': 'assets/textures/mid2.png',
+    'T5': 'assets/textures/t5.png',
+    'T4': 'assets/textures/t4.png',
+    'T10': 'assets/textures/t10.png',
+    'T11': 'assets/textures/t11.png'
   };
 
   @override
@@ -77,8 +85,7 @@ class _HomePageState extends State<HomePage> {
     if (!granted && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Permission denied. Please grant permission to select photos.'),
+          content: Text('Permission denied. Please grant permission to select photos.'),
         ),
       );
     }
@@ -100,11 +107,11 @@ class _HomePageState extends State<HomePage> {
       _currentFilterIntensity = 1.0;
       _blur = 0.0;
       _vignette = false;
-      _textOnImage = "";
+      textLayers.clear();
+      selectedLayerId = null;
       _editMode = EditMode.none;
       _selectedOverlayUrl = '';
       _overlayIntensity = 0.3;
-      // (Chroma reset removed)
       _adjBrightness = 100.0;
       _adjContrast = 100.0;
       _adjSaturation = 100.0;
@@ -112,16 +119,65 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // --- UPDATED TEXT HELPER METHODS ---
+  void _addTextLayer({bool isDate = false}) {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    setState(() {
+      // Deselect others
+      for (var layer in textLayers) layer.isSelected = false;
+
+      textLayers.add(TextLayer(
+        id: id,
+        // Date Logic: Shows "19/05/25"
+        text: isDate ? DateFormat('dd/MM/yy').format(DateTime.now()) : "Double Tap",
+        fontFamily: isDate ? 'Codystar' : 'Roboto', // Default to perforated font for date
+        position: const Offset(100, 200),
+        isDateElement: isDate,
+        color: isDate ? Colors.orangeAccent : Colors.white,
+        fontSize: isDate ? 40.0 : 32.0,
+        isSelected: true,
+        isVertical: false, // Default to Horizontal
+      ));
+      selectedLayerId = id;
+    });
+  }
+
+  // Added 'isVertical' parameter
+  void _updateLayer({Color? color, double? size, String? text, String? font, bool? isVertical}) {
+    if (selectedLayerId == null) return;
+    setState(() {
+      final index = textLayers.indexWhere((e) => e.id == selectedLayerId);
+      if (index != -1) {
+        if (color != null) textLayers[index].color = color;
+        if (size != null) textLayers[index].fontSize = size;
+        if (text != null) textLayers[index].text = text;
+        if (font != null) textLayers[index].fontFamily = font;
+        if (isVertical != null) textLayers[index].isVertical = isVertical;
+      }
+    });
+  }
+  // ---------------------------
+
   Future<void> _goToPreview() async {
+    // Deselect text so borders don't appear in the screenshot
+    setState(() {
+      for (var layer in textLayers) layer.isSelected = false;
+      selectedLayerId = null;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 50));
+
     setState(() {
       _isLoading = true;
     });
     try {
       RenderRepaintBoundary boundary = _imagePreviewKey.currentContext!
           .findRenderObject() as RenderRepaintBoundary;
+
+      // High Pixel Ratio for HD Quality
+      // We keep this at 3.0 for high quality. The glitch fix is handled in _buildPhotoView.
       ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData =
-      await image.toByteData(format: ui.ImageByteFormat.png);
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       Uint8List pngBytes = byteData!.buffer.asUint8List();
 
       if (mounted) {
@@ -135,9 +191,7 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('An error occurred generating preview: $e'),
-          ),
+          SnackBar(content: Text('An error occurred generating preview: $e')),
         );
       }
     } finally {
@@ -152,6 +206,11 @@ class _HomePageState extends State<HomePage> {
   void _onBottomBarTapped(EditMode mode) {
     setState(() {
       _editMode = (_editMode == mode) ? EditMode.none : mode;
+      // If we leave text mode, deselect text
+      if (_editMode != EditMode.text) {
+        for (var layer in textLayers) layer.isSelected = false;
+        selectedLayerId = null;
+      }
     });
   }
 
@@ -159,89 +218,52 @@ class _HomePageState extends State<HomePage> {
     switch (_editMode) {
       case EditMode.filters:
         return FiltersPanel(
-          onFilterSelected: (matrix) {
-            setState(() {
-              _currentFilter = matrix;
-              _currentFilterIntensity = 1.0;
-            });
-          },
+          onFilterSelected: (matrix) => setState(() { _currentFilter = matrix; _currentFilterIntensity = 1.0; }),
           intensity: _currentFilterIntensity,
-          onIntensityChanged: (intensity) {
-            setState(() {
-              _currentFilterIntensity = intensity;
-            });
-          },
+          onIntensityChanged: (val) => setState(() => _currentFilterIntensity = val),
           imagePreviewProvider: FileImage(_image!),
         );
 
       case EditMode.adjust:
         return AdjustPanel(
-          // Blur
           blur: _blur,
-          onBlurChanged: (value) {
-            setState(() {
-              _blur = value;
-            });
-          },
-          // Adjustments
+          onBlurChanged: (v) => setState(() => _blur = v),
           brightness: _adjBrightness,
-          onBrightnessChanged: (value) {
-            setState(() {
-              _adjBrightness = value;
-            });
-          },
+          onBrightnessChanged: (v) => setState(() => _adjBrightness = v),
           contrast: _adjContrast,
-          onContrastChanged: (value) {
-            setState(() {
-              _adjContrast = value;
-            });
-          },
+          onContrastChanged: (v) => setState(() => _adjContrast = v),
           sepia: _adjSepia,
-          onSepiaChanged: (value) {
-            setState(() {
-              _adjSepia = value;
-            });
-          },
+          onSepiaChanged: (v) => setState(() => _adjSepia = v),
         );
 
-    // --- UPDATED EFFECTS CASE ---
       case EditMode.effects:
         return EffectsPanel(
           vignette: _vignette,
-          onVignetteChanged: (value) {
-            setState(() {
-              _vignette = value;
-            });
-          },
-          // Grain (Overlays)
+          onVignetteChanged: (v) => setState(() => _vignette = v),
           overlayOptions: _overlayOptions,
           selectedOverlayUrl: _selectedOverlayUrl,
           overlayIntensity: _overlayIntensity,
           onOverlayChanged: (url) {
             setState(() {
               _selectedOverlayUrl = url;
-              if (url.isNotEmpty && _overlayIntensity == 0.0) {
-                _overlayIntensity = 0.5;
-              }
+              if (url.isNotEmpty && _overlayIntensity == 0.0) _overlayIntensity = 0.5;
             });
           },
-          onOverlayIntensityChanged: (value) {
-            setState(() {
-              _overlayIntensity = value;
-            });
-          },
-          // (Chroma params removed)
+          onOverlayIntensityChanged: (v) => setState(() => _overlayIntensity = v),
         );
-    // ----------------------------
 
       case EditMode.text:
-        return TextPanel(
-          onTextAdded: (text) {
-            setState(() {
-              _textOnImage = text;
-            });
-          },
+        return SmartTextPanel(
+          selectedLayer: activeLayer,
+          onAddNewText: () => _addTextLayer(isDate: false),
+          onAddNewDate: () => _addTextLayer(isDate: true),
+          onColorChanged: (color) => _updateLayer(color: color),
+          onSizeChanged: (size) => _updateLayer(size: size),
+          onTextChanged: (text) => _updateLayer(text: text),
+          onFontChanged: (font) => _updateLayer(font: font),
+          onVerticalChanged: (val) => _updateLayer(isVertical: val),
         );
+
       case EditMode.none:
       default:
         return const SizedBox.shrink();
@@ -249,7 +271,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   ColorMatrix _getInterpolatedMatrix() {
-    // 1. Get the base filter
     ColorMatrix filterMatrix;
     if (_currentFilterIntensity == 1.0) {
       filterMatrix = _currentFilter;
@@ -263,40 +284,35 @@ class _HomePageState extends State<HomePage> {
       filterMatrix = result;
     }
 
-    // 2. Build adjustment matrix (We removed the Saturation slider,
-    //    but still use the value from state for the matrix calculation)
     final adjMatrix = FilterMatrix.buildMatrix(
       brightness: _adjBrightness,
       contrast: _adjContrast,
-      saturation: _adjSaturation, // This is color saturation
+      saturation: _adjSaturation,
       sepia: _adjSepia,
       hue: 0,
     );
 
-    // 3. Multiply them together
     return FilterMatrix.multiply(adjMatrix, filterMatrix);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Panel Height Logic
+    double panelHeight = 0;
+    if (_editMode == EditMode.effects || _editMode == EditMode.adjust) panelHeight = 220;
+    else if (_editMode == EditMode.filters) panelHeight = 180;
+    else if (_editMode == EditMode.text) panelHeight = 280;
+
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Photo Editor'),
+        backgroundColor: Colors.black,
+        title: const Text('Photo Editor', style: TextStyle(color: Colors.white)),
         actions: [
           if (_image != null && !_isLoading)
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: TextButton(
-                onPressed: _goToPreview,
-                child: const Text(
-                  'Preview',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+            TextButton(
+              onPressed: _goToPreview,
+              child: const Text('Preview', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
             ),
           if (_isLoading)
             const Padding(
@@ -307,36 +323,21 @@ class _HomePageState extends State<HomePage> {
       ),
       body: SafeArea(
         child: Column(
-          mainAxisSize: MainAxisSize.max,
           children: [
             Expanded(
               child: Center(
-                child: _image == null
-                    ? _buildSelectPhotoView()
-                    : _buildPhotoView(),
+                child: _image == null ? _buildSelectPhotoView() : _buildPhotoView(),
               ),
             ),
             if (_image != null) ...[
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                // --- UPDATED HEIGHTS ---
-                height: _editMode == EditMode.none
-                    ? 0
-                    : _editMode == EditMode.effects
-                    ? 220 // Adjusted height (was 340)
-                    : _editMode == EditMode.adjust
-                    ? 220
-                    : 180, // Filters/Text height
-                // -----------------------
-                child: SingleChildScrollView(
-                  child: _buildEditorPanel(),
-                ),
+                height: panelHeight,
+                // NOTE: SmartTextPanel handles its own internal scrolling/layout
+                child: _buildEditorPanel(),
               ),
               const SizedBox(height: 8),
-              BottomBar(
-                onTap: _onBottomBarTapped,
-                currentMode: _editMode,
-              ),
+              BottomBar(onTap: _onBottomBarTapped, currentMode: _editMode),
             ]
           ],
         ),
@@ -348,90 +349,95 @@ class _HomePageState extends State<HomePage> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.photo_library, size: 80, color: Colors.grey[600]),
+        Icon(Icons.add_photo_alternate, size: 80, color: Colors.grey[800]),
         const SizedBox(height: 20),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
           onPressed: _selectPhoto,
-          child: const Text('Select Photo', style: TextStyle(fontSize: 16)),
+          child: const Text('Select Photo', style: TextStyle(color: Colors.white)),
         ),
       ],
     );
   }
 
-  // (Helper widget _buildBaseImage removed)
-
-  // --- UPDATED WIDGET ---
   Widget _buildPhotoView() {
-    return RepaintBoundary(
-      key: _imagePreviewKey,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // --- 1. Base Image with Filters and Blur ---
-          // (Chroma stack removed, replaced with single base image)
-          ClipRRect(
-            child: ImageFiltered(
-              imageFilter: ui.ImageFilter.blur(
-                sigmaX: _blur * 5, // This is the "simple blur"
-                sigmaY: _blur * 5,
-              ),
-              child: ColorFiltered(
-                colorFilter: ColorFilter.matrix(_getInterpolatedMatrix()),
-                child: Image.file(
-                  _image!,
-                  fit: BoxFit.cover,
+    return GestureDetector(
+      // Tap Background to Deselect Text
+      onTap: () {
+        if (selectedLayerId != null) {
+          setState(() {
+            for (var layer in textLayers) layer.isSelected = false;
+            selectedLayerId = null;
+          });
+        }
+      },
+      child: RepaintBoundary(
+        key: _imagePreviewKey,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            ClipRRect(
+              child: ImageFiltered(
+                imageFilter: ui.ImageFilter.blur(sigmaX: _blur * 5, sigmaY: _blur * 5),
+                child: ColorFiltered(
+                  colorFilter: ColorFilter.matrix(_getInterpolatedMatrix()),
+                  child: Image.file(_image!, fit: BoxFit.cover),
                 ),
               ),
             ),
-          ),
-          // --- END OF BASE IMAGE ---
-
-          // 2. Vignette (Stays on top)
-          if (_vignette)
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.8),
-                    ],
-                    stops: const [0.4, 1.0],
+            if (_vignette)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                      stops: const [0.4, 1.0],
+                    ),
                   ),
                 ),
               ),
-            ),
-
-          // 3. Overlay (Stays on top)
-          if (_selectedOverlayUrl.isNotEmpty && _overlayIntensity > 0.0)
-            Positioned.fill(
-              child: Opacity(
-                opacity: _overlayIntensity,
-                child: Image.asset(
-                  _selectedOverlayUrl,
-                  fit: BoxFit.cover,
-                  repeat: ImageRepeat.repeat,
+            if (_selectedOverlayUrl.isNotEmpty && _overlayIntensity > 0.0)
+              Positioned.fill(
+                child: Opacity(
+                  opacity: _overlayIntensity,
+                  child: Image.asset(
+                    _selectedOverlayUrl,
+                    fit: BoxFit.cover,
+                    repeat: ImageRepeat.repeat,
+                    // *** KEY FIX: This ensures the glitch texture stays sharp (crunchy)
+                    // even when exported at high resolution.
+                    filterQuality: FilterQuality.none,
+                  ),
                 ),
               ),
-            ),
 
-          // 4. Text (Stays on top)
-          if (_textOnImage.isNotEmpty)
-            Positioned.fill(
-              child: Center(
-                child: Text(
-                  _textOnImage,
-                  textAlign: TextAlign.center,
-                  style: _textStyle,
-                ),
-              ),
-            ),
-        ],
+            // Render Text Layers
+            ...textLayers.map((layer) {
+              return DraggableTextWidget(
+                layer: layer,
+                onTap: () {
+                  // Automatically switch to text mode if tapping a text item
+                  if (_editMode != EditMode.text) {
+                    setState(() => _editMode = EditMode.text);
+                  }
+                  setState(() {
+                    for (var l in textLayers) l.isSelected = (l.id == layer.id);
+                    selectedLayerId = layer.id;
+                  });
+                },
+                onDrag: (offset) {
+                  setState(() => layer.position += offset);
+                },
+                onDelete: () {
+                  setState(() {
+                    textLayers.removeWhere((e) => e.id == layer.id);
+                    selectedLayerId = null;
+                  });
+                },
+              );
+            }),
+          ],
+        ),
       ),
     );
   }

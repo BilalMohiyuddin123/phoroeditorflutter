@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'permissions_handler.dart'; // Your existing AppUtils.saveImageToGallery
+import 'permissions_handler.dart'; // Your existing AppUtils
 
 class PreviewPage extends StatefulWidget {
   final Uint8List imageData;
@@ -17,6 +17,10 @@ class _PreviewPageState extends State<PreviewPage> {
   bool _glitchEnabled = false;
   bool _isSaving = false;
   ui.Image? _decodedImage;
+
+  // We need to track how wide the image looks on screen
+  // to calculate the ratio for the final save.
+  double _lastRenderedWidth = 1.0;
 
   @override
   void initState() {
@@ -38,16 +42,34 @@ class _PreviewPageState extends State<PreviewPage> {
     setState(() => _isSaving = true);
 
     try {
-      // Render the glitch to an ui.Image
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
+      // The full resolution size
       final size = Size(_decodedImage!.width.toDouble(), _decodedImage!.height.toDouble());
-      GlitchPainter(image: _decodedImage!, intensity: _glitchEnabled ? _glitchIntensity : 0)
-          .paint(canvas, size);
+
+      // --- KEY FIX IS HERE ---
+      // Calculate the ratio between the Real Image and the Preview Image.
+      // If Real is 3000px and Preview is 300px, ratio is 10.
+      // We must multiply intensity by 10 so the glitch looks the same.
+      double scaleFactor = _decodedImage!.width / _lastRenderedWidth;
+
+      // Ensure we don't divide by zero or get weird values
+      if (scaleFactor.isNaN || scaleFactor.isInfinite || scaleFactor == 0) {
+        scaleFactor = 1.0;
+      }
+
+      final double savedIntensity = _glitchIntensity * scaleFactor;
+      // -----------------------
+
+      GlitchPainter(
+          image: _decodedImage!,
+          intensity: _glitchEnabled ? savedIntensity : 0
+      ).paint(canvas, size);
 
       final picture = recorder.endRecording();
       final img = await picture.toImage(size.width.toInt(), size.height.toInt());
       final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
       if (byteData != null) {
         final bytes = byteData.buffer.asUint8List();
         bool success = await AppUtils.saveImageToGallery(bytes);
@@ -88,16 +110,22 @@ class _PreviewPageState extends State<PreviewPage> {
                   final scaleX = constraints.maxWidth / _decodedImage!.width;
                   final scaleY = constraints.maxHeight / _decodedImage!.height;
                   final scale = scaleX < scaleY ? scaleX : scaleY;
+
                   final displayWidth = _decodedImage!.width * scale;
                   final displayHeight = _decodedImage!.height * scale;
+
+                  // STORE THE PREVIEW WIDTH for calculation in _saveImage
+                  _lastRenderedWidth = displayWidth;
 
                   return SizedBox(
                     width: displayWidth,
                     height: displayHeight,
                     child: CustomPaint(
+                      size: Size(displayWidth, displayHeight),
                       painter: GlitchPainter(
                         image: _decodedImage!,
                         intensity: _glitchEnabled ? _glitchIntensity : 0,
+                        previewSize: Size(displayWidth, displayHeight),
                       ),
                     ),
                   );
@@ -123,8 +151,8 @@ class _PreviewPageState extends State<PreviewPage> {
                     Expanded(
                       child: Slider(
                         min: 0,
-                        max: 100,
-                        divisions: 100,
+                        max: 10, // Allowed larger max for more dramatic effect
+                        divisions: 20,
                         value: _glitchIntensity,
                         onChanged: _glitchEnabled
                             ? (val) => setState(() => _glitchIntensity = val)
@@ -194,18 +222,31 @@ class _PreviewPageState extends State<PreviewPage> {
 class GlitchPainter extends CustomPainter {
   final ui.Image image;
   final double intensity;
+  final Size? previewSize;
 
-  GlitchPainter({required this.image, required this.intensity});
+  GlitchPainter({
+    required this.image,
+    required this.intensity,
+    this.previewSize,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..blendMode = BlendMode.plus;
+    final paint = Paint()
+      ..blendMode = BlendMode.plus
+      ..filterQuality = FilterQuality.high // Keeps preview smooth
+      ..isAntiAlias = true;
 
     final srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
-    final dstRect = Rect.fromLTWH(0, 0, size.width, size.height);
+
+    // Destination rectangle scaled to preview or full size
+    final dstRect = previewSize != null
+        ? Rect.fromLTWH(0, 0, previewSize!.width, previewSize!.height)
+        : Rect.fromLTWH(0, 0, size.width, size.height);
 
     if (intensity == 0) {
-      canvas.drawImageRect(image, srcRect, dstRect, Paint());
+      final basePaint = Paint()..filterQuality = FilterQuality.high;
+      canvas.drawImageRect(image, srcRect, dstRect, basePaint);
       return;
     }
 
