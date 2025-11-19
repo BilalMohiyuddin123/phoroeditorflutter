@@ -11,8 +11,8 @@ class TextLayer {
   double fontSize;
   Color color;
   String fontFamily;
-  bool isDateElement; // Changed from isTimeElement
-  bool isVertical;    // NEW: Handles Vertical/Horizontal
+  bool isDateElement;
+  bool isVertical;
   bool isSelected;
 
   TextLayer({
@@ -23,7 +23,7 @@ class TextLayer {
     this.color = Colors.white,
     this.fontFamily = 'Roboto',
     this.isDateElement = false,
-    this.isVertical = false, // Default horizontal
+    this.isVertical = false,
     this.isSelected = true,
   });
 }
@@ -34,12 +34,13 @@ class TextLayer {
 class SmartTextPanel extends StatefulWidget {
   final TextLayer? selectedLayer;
   final VoidCallback onAddNewText;
-  final VoidCallback onAddNewDate; // Changed from Time
+  final VoidCallback onAddNewDate;
   final Function(Color) onColorChanged;
   final Function(double) onSizeChanged;
   final Function(String) onTextChanged;
   final Function(String) onFontChanged;
-  final Function(bool) onVerticalChanged; // New callback
+  final Function(bool) onVerticalChanged;
+  final VoidCallback onClose; // NEW: Back button callback
 
   const SmartTextPanel({
     super.key,
@@ -51,6 +52,7 @@ class SmartTextPanel extends StatefulWidget {
     required this.onTextChanged,
     required this.onFontChanged,
     required this.onVerticalChanged,
+    required this.onClose, // Required
   });
 
   @override
@@ -62,19 +64,13 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
 
   // Standard Fonts
   final List<String> _textFonts = [
-    "Roboto", "Montserrat", "Lobster", "Oswald", "Bebas Neue",
-    "Pacifico", "Dancing Script", "Abril Fatface", "Caveat", "Shadows Into Light"
+    "Roboto","Caveat","Shadows Into Light","Oswald", "Montserrat","Pacifico","Lobster", "Bebas Neue",
+    "Dancing Script", "Abril Fatface"
   ];
 
-  // Date Specific Fonts (Perforated, Digital, Typewriter)
+  // Date Specific Fonts
   final List<String> _dateFonts = [
-    "Codystar", // Perforated dots
-    "Special Elite", // Typewriter
-    "Orbitron", // Digital
-    "Wallpoet", // Stencil
-    "Press Start 2P", // Retro
-    "Bungee Inline",
-    "Major Mono Display"
+    "Orbitron",
   ];
 
   @override
@@ -97,6 +93,7 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
     bool isEditing = widget.selectedLayer != null;
 
     return Container(
+      height: isEditing ? 420 : 150,
       padding: const EdgeInsets.symmetric(vertical: 10),
       color: const Color(0xFF1E1E1E),
       child: isEditing ? _buildEditMode() : _buildAddMode(),
@@ -129,12 +126,22 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       children: [
-        // 1. Header & Close
+        // 1. Header & Back Button
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            // NEW: Back Button
+            IconButton(
+              icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+              onPressed: () {
+                // Close keyboard if open
+                FocusScope.of(context).unfocus();
+                // Trigger the close callback
+                widget.onClose();
+              },
+            ),
             Text(layer.isDateElement ? "EDIT DATE" : "EDIT TEXT",
                 style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.bold)),
+            const Spacer(),
             GestureDetector(
               onTap: () => FocusScope.of(context).unfocus(),
               child: const Icon(Icons.keyboard_hide, color: Colors.white54),
@@ -142,7 +149,7 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
           ],
         ),
 
-        const SizedBox(height: 15),
+        const SizedBox(height: 5),
 
         // 2. Text Input (Hidden for Date)
         if (!layer.isDateElement)
@@ -200,7 +207,7 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                      "19/05",
+                      "Abc",
                       style: GoogleFonts.getFont(
                           font,
                           color: isSelected ? Colors.black : Colors.white,
@@ -235,13 +242,16 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
 
         const SizedBox(height: 10),
 
-        // 6. Color Picker
-        const Text("Color", style: TextStyle(color: Colors.white38, fontSize: 12)),
+        // 6. SIMPLIFIED COLOR PICKER
+        const Text("Color & Opacity", style: TextStyle(color: Colors.white38, fontSize: 12)),
         const SizedBox(height: 10),
-        SpectrumColorSlider(
+
+        SimpleColorPicker(
           selectedColor: layer.color,
           onColorChanged: widget.onColorChanged,
         ),
+
+        const SizedBox(height: 50),
       ],
     );
   }
@@ -285,56 +295,117 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
   }
 }
 
-class SpectrumColorSlider extends StatefulWidget {
+// ---------------------------------------------------------
+// 3. SIMPLE COLOR PICKER
+// ---------------------------------------------------------
+class SimpleColorPicker extends StatelessWidget {
   final Color selectedColor;
   final Function(Color) onColorChanged;
 
-  const SpectrumColorSlider({super.key, required this.selectedColor, required this.onColorChanged});
+  const SimpleColorPicker({super.key, required this.selectedColor, required this.onColorChanged});
 
-  @override
-  State<SpectrumColorSlider> createState() => _SpectrumColorSliderState();
-}
-
-class _SpectrumColorSliderState extends State<SpectrumColorSlider> {
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        GestureDetector(
-          onPanUpdate: (details) => _handleTouch(details.localPosition, context),
-          onTapDown: (details) => _handleTouch(details.localPosition, context),
-          child: Container(
-            height: 35,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xffff0000), Color(0xffffff00), Color(0xff00ff00),
-                  Color(0xff00ffff), Color(0xff0000ff), Color(0xffff00ff), Color(0xffff0000)
-                ],
-              ),
-            ),
+        // 1. THE MASTER COLOR SLIDER (Black -> White -> Rainbow)
+        _buildGradientTrack(
+          height: 20,
+          gradient: const LinearGradient(
+              colors: [
+                Colors.black,
+                Colors.white,
+                Color(0xffff0000), // Red
+                Color(0xffffff00), // Yellow
+                Color(0xff00ff00), // Green
+                Color(0xff00ffff), // Cyan
+                Color(0xff0000ff), // Blue
+                Color(0xffff00ff), // Magenta
+                Color(0xffff0000), // Red
+              ],
+              stops: [
+                0.0, 0.1, // Black to White
+                0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 1.0 // Rainbow
+              ]
           ),
+          onPositionChanged: (percent) {
+            _calculateColorFromPosition(percent);
+          },
         ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            CircleAvatar(backgroundColor: widget.selectedColor, radius: 15),
-            const SizedBox(width: 10),
-            Text(
-              "#${widget.selectedColor.value.toRadixString(16).toUpperCase().substring(2)}",
-              style: const TextStyle(color: Colors.white54, fontSize: 14),
-            )
-          ],
+
+        const SizedBox(height: 15),
+
+        // 2. OPACITY SLIDER
+        _buildGradientTrack(
+          height: 20,
+          gradient: LinearGradient(
+              colors: [
+                selectedColor.withOpacity(0.0),
+                selectedColor.withOpacity(1.0),
+              ]
+          ),
+          onPositionChanged: (percent) {
+            onColorChanged(selectedColor.withOpacity(percent.clamp(0.0, 1.0)));
+          },
+        ),
+
+        const SizedBox(height: 8),
+
+        // 3. PREVIEW HEX
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            "#${selectedColor.value.toRadixString(16).toUpperCase().substring(2)}",
+            style: const TextStyle(color: Colors.white38, fontSize: 10),
+          ),
         )
       ],
     );
   }
 
-  void _handleTouch(Offset localPosition, BuildContext context) {
-    final double width = context.size!.width;
-    final double percent = (localPosition.dx / width).clamp(0.0, 1.0);
-    final HSVColor hsv = HSVColor.fromAHSV(1.0, percent * 360, 1.0, 1.0);
-    widget.onColorChanged(hsv.toColor());
+  void _calculateColorFromPosition(double position) {
+    Color result;
+
+    if (position < 0.05) {
+      result = Colors.black;
+    } else if (position < 0.12) {
+      result = Colors.white;
+    } else {
+      double huePercent = (position - 0.12) / (1.0 - 0.12);
+      double hue = (huePercent * 360).clamp(0.0, 360.0);
+      result = HSVColor.fromAHSV(1.0, hue, 1.0, 1.0).toColor();
+    }
+    onColorChanged(result.withOpacity(selectedColor.opacity));
+  }
+
+  Widget _buildGradientTrack({
+    required double height,
+    required Gradient gradient,
+    required Function(double) onPositionChanged,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GestureDetector(
+          onPanUpdate: (details) {
+            double percent = (details.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
+            onPositionChanged(percent);
+          },
+          onTapDown: (details) {
+            double percent = (details.localPosition.dx / constraints.maxWidth).clamp(0.0, 1.0);
+            onPositionChanged(percent);
+          },
+          child: Container(
+            height: height,
+            width: double.infinity,
+            decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white24)
+            ),
+            child: Container(),
+          ),
+        );
+      },
+    );
   }
 }

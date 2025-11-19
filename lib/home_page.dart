@@ -119,24 +119,38 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // --- UPDATED TEXT HELPER METHODS ---
   void _addTextLayer({bool isDate = false}) {
+    // 1. Check if layer exists
+    final existingIndex = textLayers.indexWhere((layer) => layer.isDateElement == isDate);
+
+    if (existingIndex != -1) {
+      setState(() {
+        for (var layer in textLayers) layer.isSelected = false;
+        textLayers[existingIndex].isSelected = true;
+        selectedLayerId = textLayers[existingIndex].id;
+      });
+      return;
+    }
+
     final id = DateTime.now().millisecondsSinceEpoch.toString();
+
     setState(() {
-      // Deselect others
       for (var layer in textLayers) layer.isSelected = false;
 
       textLayers.add(TextLayer(
         id: id,
-        // Date Logic: Shows "19/05/25"
         text: isDate ? DateFormat('dd/MM/yy').format(DateTime.now()) : "Double Tap",
-        fontFamily: isDate ? 'Codystar' : 'Roboto', // Default to perforated font for date
-        position: const Offset(100, 200),
+        fontFamily: isDate ? 'Orbitron' : 'Roboto',
+
+        // FIXED: Changed from 500 to 100 to ensure it is visible on screen.
+        // You can drag it to the bottom corner manually.
+        position: isDate ? const Offset(20, 100) : const Offset(100, 200),
+
         isDateElement: isDate,
         color: isDate ? Colors.orangeAccent : Colors.white,
-        fontSize: isDate ? 40.0 : 32.0,
+        fontSize: isDate ? 19.0 : 32.0,
         isSelected: true,
-        isVertical: false, // Default to Horizontal
+        isVertical: false,
       ));
       selectedLayerId = id;
     });
@@ -262,6 +276,13 @@ class _HomePageState extends State<HomePage> {
           onTextChanged: (text) => _updateLayer(text: text),
           onFontChanged: (font) => _updateLayer(font: font),
           onVerticalChanged: (val) => _updateLayer(isVertical: val),
+          // THIS IS THE NEW BACK BUTTON ACTION
+          onClose: () {
+            setState(() {
+              selectedLayerId = null; // Deselect to go back to Add Menu
+              for (var layer in textLayers) layer.isSelected = false;
+            });
+          },
         );
 
       case EditMode.none:
