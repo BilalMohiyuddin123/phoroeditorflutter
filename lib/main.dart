@@ -13,13 +13,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Photo Editor',
+      title: 'Nox Edit',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.grey[900],
         appBarTheme: AppBarTheme(
-          backgroundColor: Colors.grey[850],
+          backgroundColor: Colors.black,
         ),
         useMaterial3: true,
       ),

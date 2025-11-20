@@ -232,7 +232,13 @@ class _HomePageState extends State<HomePage> {
     switch (_editMode) {
       case EditMode.filters:
         return FiltersPanel(
-          onFilterSelected: (matrix) => setState(() { _currentFilter = matrix; _currentFilterIntensity = 1.0; }),
+          // PASS THE CURRENT FILTER HERE
+          activeFilter: _currentFilter,
+
+          onFilterSelected: (matrix) => setState(() {
+            _currentFilter = matrix;
+            _currentFilterIntensity = 1.0;
+          }),
           intensity: _currentFilterIntensity,
           onIntensityChanged: (val) => setState(() => _currentFilterIntensity = val),
           imagePreviewProvider: FileImage(_image!),
