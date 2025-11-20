@@ -19,8 +19,12 @@ dependencies:
   image: ^4.5.4
   google_fonts: ^6.3.0
   intl: ^0.20.2
+  google_mobile_ads: ^5.3.1
+  http: ^1.6.0
 
   cupertino_icons: ^1.0.8
+
+
 
 
 

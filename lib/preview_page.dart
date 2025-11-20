@@ -1,7 +1,9 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'permissions_handler.dart'; // Your existing AppUtils
+import 'package:google_mobile_ads/google_mobile_ads.dart'; // Import Ads
+import 'ad_config.dart'; // Import Config
+import 'permissions_handler.dart';
 
 class PreviewPage extends StatefulWidget {
   final Uint8List imageData;
@@ -17,15 +19,262 @@ class _PreviewPageState extends State<PreviewPage> {
   bool _glitchEnabled = false;
   bool _isSaving = false;
   ui.Image? _decodedImage;
-
-  // We need to track how wide the image looks on screen
-  // to calculate the ratio for the final save.
   double _lastRenderedWidth = 1.0;
+
+  // --- AD VARIABLES ---
+  BannerAd? _bannerAd;
+  bool _isAdLoaded = false;
+  InterstitialAd? _interstitialAd;
+  RewardedAd? _rewardedAd;
 
   @override
   void initState() {
     super.initState();
     _loadUiImage(widget.imageData);
+    _loadBannerAd();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    _interstitialAd?.dispose();
+    _rewardedAd?.dispose();
+    super.dispose();
+  }
+
+  // --- BANNER AD LOGIC ---
+  void _loadBannerAd() {
+    if (AdConfig.bannerAdUnit.isEmpty || !AdConfig.bPreview) return;
+
+    _bannerAd = BannerAd(
+      adUnitId: AdConfig.bannerAdUnit,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) {
+            setState(() => _isAdLoaded = true);
+          }
+        },
+        onAdFailedToLoad: (ad, err) {
+          debugPrint('Preview Page Banner failed: $err');
+          ad.dispose();
+        },
+      ),
+    )..load();
+  }
+  // ----------------
+
+  // --- SAVE BUTTON HANDLER ---
+  void _handleSaveButton() {
+    if (_isSaving) return;
+
+    // 1. CONFLICT CHECK: If iSave=true AND rsave=true -> SHOW NO AD
+    if (AdConfig.iSave && AdConfig.rSave) {
+      _processSaveWithoutAd();
+      return;
+    }
+
+    // 2. REWARD CHECK: rsave=true -> Show Reward Ad -> Then Save
+    if (AdConfig.rSave && AdConfig.rewardAdUnit.isNotEmpty) {
+      _loadAndShowRewardedAd();
+      return;
+    }
+
+    // 3. INTERSTITIAL CHECK: isave=true -> Save -> Then Show Interstitial
+    if (AdConfig.iSave && AdConfig.interstitialAdUnit.isNotEmpty) {
+      _processSaveWithInterstitial();
+      return;
+    }
+
+    // 4. DEFAULT: Just Save
+    _processSaveWithoutAd();
+  }
+
+  // --- SCENARIO 1 & 4: Just Save ---
+  void _processSaveWithoutAd() async {
+    bool success = await _performSave();
+    if (success && mounted) {
+      _showCenteredSuccessDialog();
+    }
+  }
+
+  // --- SCENARIO 2: Reward Ad (Safe Flow) ---
+  void _loadAndShowRewardedAd() {
+    setState(() => _isSaving = true); // Show Loading...
+
+    RewardedAd.load(
+      adUnitId: AdConfig.rewardAdUnit,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          _rewardedAd = ad;
+
+          _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
+            // A. If Ad fails to show (e.g. connection drop), SAVE IMMEDIATELY
+              onAdFailedToShowFullScreenContent: (ad, err) {
+                ad.dispose();
+                _processSaveWithoutAd();
+              },
+
+              // B. When Ad is closed (Crossed OR Finished) -> SAVE
+              // We use this single callback for both cases to prevent double-saving
+              onAdDismissedFullScreenContent: (ad) {
+                ad.dispose();
+                // Add a tiny delay so the UI doesn't jump instantly
+                Future.delayed(const Duration(milliseconds: 200), () {
+                  if (mounted) _processSaveWithoutAd();
+                });
+              }
+          );
+
+          if (mounted) {
+            _rewardedAd!.show(
+                onUserEarnedReward: (ad, reward) {
+                  // We don't trigger save here anymore.
+                  // We wait for the user to actually CLOSE the ad (onAdDismissedFullScreenContent)
+                  // This is cleaner UX.
+                }
+            );
+          }
+        },
+        onAdFailedToLoad: (err) {
+          debugPrint('Reward Ad failed to load: $err');
+          // Ad failed? Don't punish user. Just save.
+          _processSaveWithoutAd();
+        },
+      ),
+    );
+  }
+
+  // --- SCENARIO 3: Interstitial Ad (Save First, Ad Later) ---
+  void _processSaveWithInterstitial() async {
+    // A. Save Image First
+    bool success = await _performSave();
+
+    if (!success) return; // Failed to save, stop here
+
+    // B. Show Success Dialog
+    if (mounted) {
+      await _showCenteredSuccessDialog(autoDismiss: true);
+    }
+
+    // C. Load and Show Interstitial
+    if (mounted) {
+      setState(() => _isSaving = true); // Show Spinner while fetching ad
+    }
+
+    InterstitialAd.load(
+      adUnitId: AdConfig.interstitialAdUnit,
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _interstitialAd = ad;
+          _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              ad.dispose();
+              if (mounted) setState(() => _isSaving = false);
+            },
+            onAdFailedToShowFullScreenContent: (ad, err) {
+              ad.dispose();
+              if (mounted) setState(() => _isSaving = false);
+            },
+          );
+          if (mounted) _interstitialAd!.show();
+        },
+        onAdFailedToLoad: (err) {
+          debugPrint('Interstitial failed: $err');
+          if (mounted) setState(() => _isSaving = false);
+        },
+      ),
+    );
+  }
+
+  // --- HELPER: ACTUAL SAVE LOGIC ---
+  Future<bool> _performSave() async {
+    if (_decodedImage == null) return false;
+    // Don't set _isSaving = true here, it's already set by the caller
+
+    try {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final size = Size(
+          _decodedImage!.width.toDouble(), _decodedImage!.height.toDouble());
+
+      double scaleFactor = _decodedImage!.width / _lastRenderedWidth;
+      if (scaleFactor.isNaN || scaleFactor.isInfinite || scaleFactor == 0) {
+        scaleFactor = 1.0;
+      }
+
+      final double savedIntensity = _glitchIntensity * scaleFactor;
+
+      GlitchPainter(
+          image: _decodedImage!,
+          intensity: _glitchEnabled ? savedIntensity : 0)
+          .paint(canvas, size);
+
+      final picture = recorder.endRecording();
+      final img =
+      await picture.toImage(size.width.toInt(), size.height.toInt());
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData != null) {
+        final bytes = byteData.buffer.asUint8List();
+        bool success = await AppUtils.saveImageToGallery(bytes);
+        // Don't turn off isSaving yet if we are going to show success dialog
+        if (!success) setState(() => _isSaving = false);
+        return success;
+      }
+    } catch (e) {
+      debugPrint("Save error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving: $e')),
+        );
+      }
+    }
+    setState(() => _isSaving = false);
+    return false;
+  }
+
+  // --- HELPER: CENTERED SUCCESS DIALOG ---
+  Future<void> _showCenteredSuccessDialog({bool autoDismiss = true}) async {
+    // Ensure loading spinner is off before showing dialog
+    setState(() => _isSaving = false);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.black.withOpacity(0.8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.check_circle, color: Colors.greenAccent, size: 60),
+                SizedBox(height: 20),
+                Text(
+                  "Image Saved Successfully!",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    // Auto dismiss after 1.5 seconds
+    if (autoDismiss) {
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context); // Close dialog
+      }
+    }
   }
 
   Future<void> _loadUiImage(Uint8List data) async {
@@ -34,60 +283,6 @@ class _PreviewPageState extends State<PreviewPage> {
     setState(() {
       _decodedImage = frame.image;
     });
-  }
-
-  /// Save the current glitch canvas as image
-  Future<void> _saveImage() async {
-    if (_decodedImage == null) return;
-    setState(() => _isSaving = true);
-
-    try {
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      // The full resolution size
-      final size = Size(_decodedImage!.width.toDouble(), _decodedImage!.height.toDouble());
-
-      // --- KEY FIX IS HERE ---
-      // Calculate the ratio between the Real Image and the Preview Image.
-      // If Real is 3000px and Preview is 300px, ratio is 10.
-      // We must multiply intensity by 10 so the glitch looks the same.
-      double scaleFactor = _decodedImage!.width / _lastRenderedWidth;
-
-      // Ensure we don't divide by zero or get weird values
-      if (scaleFactor.isNaN || scaleFactor.isInfinite || scaleFactor == 0) {
-        scaleFactor = 1.0;
-      }
-
-      final double savedIntensity = _glitchIntensity * scaleFactor;
-      // -----------------------
-
-      GlitchPainter(
-          image: _decodedImage!,
-          intensity: _glitchEnabled ? savedIntensity : 0
-      ).paint(canvas, size);
-
-      final picture = recorder.endRecording();
-      final img = await picture.toImage(size.width.toInt(), size.height.toInt());
-      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-
-      if (byteData != null) {
-        final bytes = byteData.buffer.asUint8List();
-        bool success = await AppUtils.saveImageToGallery(bytes);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(success ? 'Image saved!' : 'Failed to save image')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
   }
 
   void _editMore() {
@@ -107,14 +302,15 @@ class _PreviewPageState extends State<PreviewPage> {
                   ? const CircularProgressIndicator()
                   : LayoutBuilder(
                 builder: (context, constraints) {
-                  final scaleX = constraints.maxWidth / _decodedImage!.width;
-                  final scaleY = constraints.maxHeight / _decodedImage!.height;
+                  final scaleX =
+                      constraints.maxWidth / _decodedImage!.width;
+                  final scaleY =
+                      constraints.maxHeight / _decodedImage!.height;
                   final scale = scaleX < scaleY ? scaleX : scaleY;
 
                   final displayWidth = _decodedImage!.width * scale;
                   final displayHeight = _decodedImage!.height * scale;
 
-                  // STORE THE PREVIEW WIDTH for calculation in _saveImage
                   _lastRenderedWidth = displayWidth;
 
                   return SizedBox(
@@ -147,11 +343,12 @@ class _PreviewPageState extends State<PreviewPage> {
                 ),
                 Row(
                   children: [
-                    const Text('Intensity:', style: TextStyle(color: Colors.white70)),
+                    const Text('Intensity:',
+                        style: TextStyle(color: Colors.white70)),
                     Expanded(
                       child: Slider(
                         min: 0,
-                        max: 10, // Allowed larger max for more dramatic effect
+                        max: 10,
                         divisions: 20,
                         value: _glitchIntensity,
                         onChanged: _glitchEnabled
@@ -171,7 +368,10 @@ class _PreviewPageState extends State<PreviewPage> {
             decoration: BoxDecoration(
               color: Colors.grey[900],
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8, spreadRadius: 2),
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 2),
               ],
             ),
             child: Row(
@@ -191,7 +391,8 @@ class _PreviewPageState extends State<PreviewPage> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _isSaving ? null : _saveImage,
+                    // NEW HANDLER
+                    onPressed: _isSaving ? null : _handleSaveButton,
                     icon: _isSaving
                         ? const SizedBox(
                       width: 20,
@@ -202,7 +403,7 @@ class _PreviewPageState extends State<PreviewPage> {
                       ),
                     )
                         : const Icon(Icons.download),
-                    label: Text(_isSaving ? 'Saving...' : 'Save Image'),
+                    label: Text(_isSaving ? 'Processing...' : 'Save Image'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       foregroundColor: Colors.white,
@@ -213,6 +414,16 @@ class _PreviewPageState extends State<PreviewPage> {
               ],
             ),
           ),
+
+          // --- BANNER AD SECTION ---
+          if (_isAdLoaded && _bannerAd != null)
+            Container(
+              alignment: Alignment.center,
+              width: _bannerAd!.size.width.toDouble(),
+              height: _bannerAd!.size.height.toDouble(),
+              color: Colors.black, // Matches background
+              child: AdWidget(ad: _bannerAd!),
+            ),
         ],
       ),
     );
@@ -234,12 +445,12 @@ class GlitchPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..blendMode = BlendMode.plus
-      ..filterQuality = FilterQuality.high // Keeps preview smooth
+      ..filterQuality = FilterQuality.high
       ..isAntiAlias = true;
 
-    final srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final srcRect =
+    Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
 
-    // Destination rectangle scaled to preview or full size
     final dstRect = previewSize != null
         ? Rect.fromLTWH(0, 0, previewSize!.width, previewSize!.height)
         : Rect.fromLTWH(0, 0, size.width, size.height);
@@ -258,10 +469,7 @@ class GlitchPainter extends CustomPainter {
       0, 0, 0, 1, 0,
     ]);
     canvas.drawImageRect(
-        image,
-        srcRect,
-        dstRect.shift(Offset(intensity, 0)),
-        paint);
+        image, srcRect, dstRect.shift(Offset(intensity, 0)), paint);
 
     // Green channel center
     paint.colorFilter = const ui.ColorFilter.matrix([
@@ -280,10 +488,7 @@ class GlitchPainter extends CustomPainter {
       0, 0, 0, 1, 0,
     ]);
     canvas.drawImageRect(
-        image,
-        srcRect,
-        dstRect.shift(Offset(-intensity, 0)),
-        paint);
+        image, srcRect, dstRect.shift(Offset(-intensity, 0)), paint);
   }
 
   @override
