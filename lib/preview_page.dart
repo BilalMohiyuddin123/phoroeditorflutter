@@ -292,8 +292,25 @@ class _PreviewPageState extends State<PreviewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Glitch Preview')),
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+            'PREVIEW',
+            style: TextStyle(
+                letterSpacing: 2.0,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontSize: 18
+            )
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: _editMore,
+        ),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -336,84 +353,187 @@ class _PreviewPageState extends State<PreviewPage> {
                 SwitchListTile(
                   title: const Text(
                     'Enable Glitch',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,      // Increase size (adjust as needed)
+                      fontWeight: FontWeight.bold, // Make text bold
+                    ),
                   ),
+
                   value: _glitchEnabled,
+                  // UPDATED: Active color set to blue
+                  activeColor: Colors.blueAccent,
                   onChanged: (val) => setState(() => _glitchEnabled = val),
                 ),
                 Row(
                   children: [
                     const Text('Intensity:',
-                        style: TextStyle(color: Colors.white70)),
+                        style: TextStyle(color: Colors.white)),
                     Expanded(
-                      child: Slider(
-                        min: 0,
-                        max: 10,
-                        divisions: 20,
-                        value: _glitchIntensity,
-                        onChanged: _glitchEnabled
-                            ? (val) => setState(() => _glitchIntensity = val)
-                            : null,
+                      // UPDATED: Slider Theme and removed divisions (dots)
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          activeTrackColor: Colors.blueAccent,
+                          inactiveTrackColor: Colors.blueAccent.withOpacity(0.3),
+                          thumbColor: Colors.blueAccent,
+                          overlayColor: Colors.blueAccent.withOpacity(0.2),
+                          trackHeight: 3.0,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8.0),
+                        ),
+                        child: Slider(
+                          min: 0,
+                          max: 10,
+                          // divisions: 20, // Removed dots
+                          value: _glitchIntensity,
+                          onChanged: _glitchEnabled
+                              ? (val) => setState(() => _glitchIntensity = val)
+                              : null,
+                        ),
                       ),
                     ),
                     Text(_glitchIntensity.round().toString(),
-                        style: const TextStyle(color: Colors.white)),
+                        style: const TextStyle(color: Colors.white70)),
                   ],
                 ),
               ],
             ),
           ),
+// --- BUTTON ROW ---
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 8,
-                    spreadRadius: 2),
-              ],
-            ),
+            color: Colors.black, // Ensure background is black
             child: Row(
               children: [
+
+                // --- 1. EDIT MORE (Glass + Glow like "Change") ---
                 Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isSaving ? null : _editMore,
-                    icon: const Icon(Icons.edit),
-                    label: const Text('Edit More'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    // NEW HANDLER
-                    onPressed: _isSaving ? null : _handleSaveButton,
-                    icon: _isSaving
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
+                  child: Container(
+                    height: 55,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                        color: Colors.blueAccent,
+                        width: 1.5,
                       ),
-                    )
-                        : const Icon(Icons.download),
-                    label: Text(_isSaving ? 'Processing...' : 'Save Image'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blueAccent.withOpacity(0.25),
+                          blurRadius: 12,
+                          spreadRadius: 0,
+                          offset: const Offset(0, 0),
+                        ),
+                      ],
+                    ),
+                    child: InkWell(
+                      onTap: _isSaving ? null : _editMore,
+                      borderRadius: BorderRadius.circular(30),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.edit, color: Colors.white, size: 22),
+                          SizedBox(width: 8),
+                          Text(
+                            'Edit More',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
+
+                const SizedBox(width: 16), // spacing
+
+                // --- 2. SAVE IMAGE (Gradient + Glow like "Next") ---
+                Expanded(
+                  child: Container(
+                    height: 55,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(30),
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF2979FF),
+                          Color(0xFF448AFF),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blueAccent.withOpacity(0.45),
+                          blurRadius: 14,
+                          spreadRadius: 5,
+                          offset: Offset(0, 0),
+                        ),
+                        BoxShadow(
+                          color: Colors.blueAccent.withOpacity(0.20),
+                          blurRadius: 35,
+                          spreadRadius: 12,
+                          offset: Offset(0, 0),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                      onPressed: _isSaving ? null : _handleSaveButton,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: _isSaving
+                            ? [
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Processing...',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ]
+                            : const [
+                          Text(
+                            'Save',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.download, color: Colors.white, size: 22),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
               ],
             ),
           ),
+
 
           // --- BANNER AD SECTION ---
           if (_isAdLoaded && _bannerAd != null)

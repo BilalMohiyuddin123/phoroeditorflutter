@@ -1,4 +1,3 @@
-// adjust_panel.dart
 import 'package:flutter/material.dart';
 
 class AdjustPanel extends StatelessWidget {
@@ -27,56 +26,58 @@ class AdjustPanel extends StatelessWidget {
   });
 
   @override
-  // --- THIS IS THE FIX ---
   Widget build(BuildContext context) {
-    // It was 'BuildContextContext', it is now 'BuildContext'
-    // -------------------------
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 15.0),
       color: Colors.black.withOpacity(0.3),
-      // Use SingleChildScrollView to prevent overflow on smaller screens
       child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // --- Blur Slider ---
+            // --- Blur Slider ---
             _buildSlider(
+              context: context,
               label: 'Blur',
-              value: blur,
-              onChanged: onBlurChanged,
+              value: blur * 100,          // Show 0–100
+              onChanged: (v) => onBlurChanged(v / 100), // Convert UI value to 0–1
               min: 0.0,
-              max: 1.0,
-              divisions: 10,
+              max: 100.0,
             ),
+
+            const SizedBox(height: 10),
+
             // --- Brightness Slider ---
             _buildSlider(
+              context: context,
               label: 'Brightness',
               value: brightness,
               onChanged: onBrightnessChanged,
               min: 0.0,
-              max: 200.0, // 0% to 200%
-              divisions: 20,
-              displayValue: (brightness).toStringAsFixed(0),
+              max: 200.0,
             ),
+            const SizedBox(height: 10),
+
             // --- Contrast Slider ---
             _buildSlider(
+              context: context,
               label: 'Contrast',
               value: contrast,
               onChanged: onContrastChanged,
               min: 0.0,
-              max: 200.0, // 0% to 200%
-              divisions: 20,
-              displayValue: (contrast).toStringAsFixed(0),
+              max: 200.0,
             ),
-            // --- Sepia (Tint) Slider ---
+            const SizedBox(height: 10),
+
+            // --- Tint (Sepia) Slider ---
             _buildSlider(
-              label: 'Tint', // As requested
+              context: context,
+              label: 'Tint',
               value: sepia,
               onChanged: onSepiaChanged,
               min: 0.0,
-              max: 100.0, // 0% to 100%
-              divisions: 20,
-              displayValue: (sepia).toStringAsFixed(0),
+              max: 100.0,
             ),
           ],
         ),
@@ -84,34 +85,56 @@ class AdjustPanel extends StatelessWidget {
     );
   }
 
-  // Helper widget to build a labeled slider
   Widget _buildSlider({
+    required BuildContext context,
     required String label,
     required double value,
     required Function(double) onChanged,
     required double min,
     required double max,
-    required int divisions,
-    String? displayValue,
   }) {
     return Row(
       children: [
+        // Label
         SizedBox(
-          width: 70, // Increased width for longer labels
+          width: 80,
           child: Text(
             label,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w500, fontSize: 14),
             overflow: TextOverflow.ellipsis,
           ),
         ),
+        // Slider
         Expanded(
-          child: Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            label: displayValue ?? (value * 100).toStringAsFixed(0),
-            onChanged: onChanged,
+          child: SizedBox(
+            height: 30,
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 3.0,
+                activeTrackColor: Colors.blueAccent,
+                inactiveTrackColor: Colors.blueAccent.withOpacity(0.3),
+                thumbColor: Colors.blueAccent,
+                overlayColor: Colors.white.withOpacity(0.2),
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8.0),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16.0),
+              ),
+              child: Slider(
+                value: value,
+                min: min,
+                max: max,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+        ),
+        // Number Value
+        SizedBox(
+          width: 35,
+          child: Text(
+            value.toStringAsFixed(0),
+            textAlign: TextAlign.end,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
           ),
         ),
       ],

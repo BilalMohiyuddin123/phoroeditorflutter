@@ -54,7 +54,7 @@ class BottomBar extends StatelessWidget {
         required EditMode mode}) {
 
     final bool isSelected = currentMode == mode;
-    final Color color = isSelected ? Colors.blueAccent : Colors.grey;
+    final Color color = isSelected ? Colors.blueAccent : Colors.white;
 
     return GestureDetector(
       onTap: () => onTap(mode),

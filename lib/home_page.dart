@@ -41,6 +41,7 @@ class _HomePageState extends State<HomePage> {
   // Effect state
   double _blur = 0.0;
   bool _vignette = false;
+  double _vignetteIntensity = 0.4; // NEW: Vignette Intensity Variable
   String _selectedOverlayUrl = '';
   double _overlayIntensity = 0.5;
 
@@ -351,6 +352,7 @@ class _HomePageState extends State<HomePage> {
       _currentFilterIntensity = 1.0;
       _blur = 0.0;
       _vignette = false;
+      _vignetteIntensity = 0.4; // NEW: Reset intensity
       textLayers.clear();
       selectedLayerId = null;
       _editMode = EditMode.none;
@@ -385,7 +387,7 @@ class _HomePageState extends State<HomePage> {
         id: id,
         text: isDate
             ? DateFormat('dd/MM/yy').format(DateTime.now())
-            : "Double Tap",
+            : "Tap",
         fontFamily: isDate ? 'Orbitron' : 'Roboto',
         position: isDate ? const Offset(20, 100) : const Offset(100, 200),
         isDateElement: isDate,
@@ -458,6 +460,10 @@ class _HomePageState extends State<HomePage> {
         return EffectsPanel(
           vignette: _vignette,
           onVignetteChanged: (v) => setState(() => _vignette = v),
+          // NEW: Pass the intensity values to the panel
+          vignetteValue: _vignetteIntensity,
+          onVignetteValueChanged: (v) => setState(() => _vignetteIntensity = v),
+
           overlayOptions: _overlayOptions,
           selectedOverlayUrl: _selectedOverlayUrl,
           overlayIntensity: _overlayIntensity,
@@ -527,7 +533,7 @@ class _HomePageState extends State<HomePage> {
     double panelHeight = 0;
     if (_isImageConfirmed) {
       if (_editMode == EditMode.effects || _editMode == EditMode.adjust) {
-        panelHeight = 220;
+        panelHeight = 200;
       } else if (_editMode == EditMode.filters) {
         panelHeight = 180;
       } else if (_editMode == EditMode.text) {
@@ -539,23 +545,98 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
+        centerTitle: true,
+        // 1. Back Button (Only shows when editing)
         leading: _isImageConfirmed
             ? IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
           onPressed: _handleBackFromEditor,
         )
             : null,
-        title: const Text('Photo Editor', style: TextStyle(color: Colors.white)),
+
+        // 2. Title Logic (Hidden when editing, Visible on Home)
+        title: _isImageConfirmed
+            ? null
+            : RichText(
+          text: TextSpan(
+            style: const TextStyle(fontSize: 22, fontFamily: 'Roboto'),
+            children: [
+              const TextSpan(
+                text: 'NOX',
+                style: TextStyle(
+                  color: Colors.blueAccent,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              TextSpan(
+                text: 'EDITOR',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontWeight: FontWeight.w300,
+                  letterSpacing: 3.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 3. Actions (The Sexy Preview Button)
         actions: [
-          // Hide preview button if loading (so you can't double tap)
           if (_isImageConfirmed && !_isLoading)
-            TextButton(
-              onPressed: _handlePreviewTap,
-              child: const Text('Preview',
-                  style: TextStyle(
-                      color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+            Center(
+      child: Container(
+      height: 44, // Bigger & more clickable
+      constraints: const BoxConstraints(minWidth: 110), // Wider for elegance
+      margin: const EdgeInsets.only(right: 20), // More space from right
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+
+        // Elegant Blue Gradient
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF2979FF), // Darker Blue
+            Color(0xFF448AFF), // Lighter Blue
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        // No outer glow
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(30),
+          onTap: _handlePreviewTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Continue',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15, // Slightly bigger text
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 6),
+                Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+              ],
             ),
-        ],
+          ),
+        ),
+      ),
+    ),
+            ),
+    ],
       ),
       body: Stack(
         children: [
@@ -595,10 +676,10 @@ class _HomePageState extends State<HomePage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: const [
-                        CircularProgressIndicator(color: Colors.blueAccent),
+                        CircularProgressIndicator(color: Colors.white),
                         SizedBox(height: 20),
                         Text(
-                          "Loading...", // Simplified text for reuse
+                          "Loading...",
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -619,23 +700,125 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildSelectOrConfirmView() {
     if (_image == null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.add_photo_alternate, size: 80, color: Colors.grey[800]),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+      return Container(
+        width: double.infinity,
+        color: Colors.black,
+        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Spacer(),
+
+// 1. HEADER WITH GRADIENT
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Colors.blueAccent, Colors.purpleAccent],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ).createShader(bounds),
+              blendMode: BlendMode.srcIn,
+              child: const Text(
+                "Edit\nLike a Pro",
+                style: TextStyle(
+                  color: Colors.white, // Required for ShaderMask to work
+                  fontSize: 40,
+                  fontWeight: FontWeight.w800, // Extra bold for impact
+                  height: 1.1,
+                  letterSpacing: -1.5,
+                ),
+              ),
             ),
-            onPressed: _selectPhoto,
-            child: const Text('Select Photo',
-                style: TextStyle(color: Colors.white, fontSize: 16)),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              "Import a photo to start editing.",
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5), // Subtle transparency
+                fontSize: 16,
+                letterSpacing: 0.5,
+              ),
+            ),
+
+            const SizedBox(height: 40),
+
+            // 2. THE SQUARE DROP ZONE
+            GestureDetector(
+              onTap: _selectPhoto,
+              child: Container(
+                // Fixed height makes it look like a square/card
+                height: 320,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  // Subtle Glass Gradient
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.08),
+                      Colors.white.withOpacity(0.02)
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(30),
+                  // Clean thin border
+                  border: Border.all(color: Colors.white10, width: 1.5),
+                  // Soft Glow behind the box
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blueAccent.withOpacity(0.08),
+                      blurRadius: 50,
+                      spreadRadius: -10,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // The Glowing Add Button
+                    Container(
+                      height: 80,
+                      width: 80,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Colors.blueAccent, Color(0xFF2979FF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blueAccent.withOpacity(0.5),
+                            blurRadius: 25,
+                            spreadRadius: 5,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.add, color: Colors.white, size: 35),
+                    ),
+                    const SizedBox(height: 25),
+                    const Text(
+                      "Tap to Choose Image",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                  ],
+                ),
+              ),
+            ),
+
+            const Spacer(),
+
+          ],
+        ),
       );
     } else {
+      // --- CONFIRMATION SCREEN (UNCHANGED) ---
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -650,30 +833,120 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 20),
           Padding(
-            padding: const EdgeInsets.only(bottom: 20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[800],
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+
+                // --- 1. THE "CHANGE" BUTTON (Glass + Subtle Glow) ---
+                Expanded(
+                  child: Container(
+                    height: 55,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                          color: Colors.blueAccent,
+                          width: 1.5
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blueAccent.withOpacity(0.25),
+                          blurRadius: 12,
+                          spreadRadius: 0,
+                          offset: const Offset(0, 0),
+                        ),
+                      ],
+                    ),
+                    child: InkWell(
+                      onTap: _isLoading ? null : _selectPhoto,
+                      borderRadius: BorderRadius.circular(30),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
+                          SizedBox(width: 8),
+                          Text(
+                            'Change',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  onPressed: _isLoading ? null : _selectPhoto,
-                  icon: const Icon(Icons.refresh, color: Colors.white),
-                  label: const Text('Change Photo',
-                      style: TextStyle(color: Colors.white)),
                 ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+
+                const SizedBox(width: 15), // Spacing
+
+                // --- 2. THE "NEXT" BUTTON (Solid + OUTER GLOW FIXED) ---
+// --- 2. THE "NEXT" BUTTON (Perfect 4-Sided Glow) ---
+                Expanded(
+                  child: Container(
+                    height: 55,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(30),
+
+                      // Gradient background
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF2979FF),
+                          Color(0xFF448AFF),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+
+                      // 🌟 Perfect 4-Side Glow (Outer Aura)
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blueAccent.withOpacity(0.45),
+                          blurRadius: 14,
+                          spreadRadius: 5,      // KEY: pushes glow outwards on all sides
+                          offset: const Offset(0, 0), // no direction → even 4-side glow
+                        ),
+                        BoxShadow(
+                          color: Colors.blueAccent.withOpacity(0.20),
+                          blurRadius: 35,        // bigger, softer outer glow
+                          spreadRadius: 12,
+                          offset: const Offset(0, 0),
+                        ),
+                      ],
+                    ),
+
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                      onPressed: _isLoading ? null : _handleNextButton,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Text(
+                            'Next',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 22),
+                        ],
+                      ),
+                    ),
                   ),
-                  onPressed: _isLoading ? null : _handleNextButton,
-                  icon: const Icon(Icons.check, color: Colors.white),
-                  label: const Text('Next',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
+
               ],
             ),
           ),
@@ -735,6 +1008,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
+            // NEW: VIGNETTE OVERLAY with Dynamic Intensity
             if (_vignette)
               Positioned.fill(
                 child: Container(
@@ -742,9 +1016,9 @@ class _HomePageState extends State<HomePage> {
                     gradient: RadialGradient(
                       colors: [
                         Colors.transparent,
-                        Colors.black.withOpacity(0.8)
+                        Colors.black.withOpacity(_vignetteIntensity) // NEW
                       ],
-                      stops: const [0.4, 1.0],
+                      stops: const [0.2, 1.0], // Tweaked for smoother gradient
                     ),
                   ),
                 ),

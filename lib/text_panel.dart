@@ -40,7 +40,7 @@ class SmartTextPanel extends StatefulWidget {
   final Function(String) onTextChanged;
   final Function(String) onFontChanged;
   final Function(bool) onVerticalChanged;
-  final VoidCallback onClose; // NEW: Back button callback
+  final VoidCallback onClose;
 
   const SmartTextPanel({
     super.key,
@@ -52,7 +52,7 @@ class SmartTextPanel extends StatefulWidget {
     required this.onTextChanged,
     required this.onFontChanged,
     required this.onVerticalChanged,
-    required this.onClose, // Required
+    required this.onClose,
   });
 
   @override
@@ -93,9 +93,9 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
     bool isEditing = widget.selectedLayer != null;
 
     return Container(
-      height: isEditing ? 420 : 150,
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 10),
-      color: const Color(0xFF1E1E1E),
+      color: Colors.white10,
       child: isEditing ? _buildEditMode() : _buildAddMode(),
     );
   }
@@ -105,7 +105,7 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text("Add Layer", style: TextStyle(color: Colors.white54, letterSpacing: 1.2)),
+        const Text("Add Layer", style: TextStyle(color: Colors.white, letterSpacing: 1.2)),
         const SizedBox(height: 20),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -123,136 +123,141 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
     final layer = widget.selectedLayer!;
     final fontsToUse = layer.isDateElement ? _dateFonts : _textFonts;
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      children: [
-        // 1. Header & Back Button
-        Row(
-          children: [
-            // NEW: Back Button
-            IconButton(
-              icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
-              onPressed: () {
-                // Close keyboard if open
-                FocusScope.of(context).unfocus();
-                // Trigger the close callback
-                widget.onClose();
-              },
-            ),
-            Text(layer.isDateElement ? "EDIT DATE" : "EDIT TEXT",
-                style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.bold)),
-            const Spacer(),
-            GestureDetector(
-              onTap: () => FocusScope.of(context).unfocus(),
-              child: const Icon(Icons.keyboard_hide, color: Colors.white54),
-            )
-          ],
-        ),
-
-        const SizedBox(height: 5),
-
-        // 2. Text Input (Hidden for Date)
-        if (!layer.isDateElement)
-          TextField(
-            controller: _textEditingController,
-            onChanged: widget.onTextChanged,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white10,
-              prefixIcon: const Icon(Icons.edit, color: Colors.white54),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-            ),
+    return Scrollbar(
+      thumbVisibility: true,
+      thickness: 5,
+      radius: const Radius.circular(8),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: [
+          // 1. Header & Back Button
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                onPressed: () {
+                  FocusScope.of(context).unfocus();
+                  widget.onClose();
+                },
+              ),
+              Text(layer.isDateElement ? "EDIT DATE" : "EDIT TEXT",
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              const Spacer(),
+            ],
           ),
 
-        // 3. Orientation Toggle (Only for Date)
-        if (layer.isDateElement)
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 10),
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-                color: Colors.white10,
-                borderRadius: BorderRadius.circular(8)
-            ),
-            child: Row(
-              children: [
-                Expanded(child: _buildToggleOption("Horizontal", !layer.isVertical)),
-                Expanded(child: _buildToggleOption("Vertical", layer.isVertical)),
-              ],
-            ),
-          ),
+          const SizedBox(height: 5),
 
-        const SizedBox(height: 10),
-
-        // 4. Font Selector
-        const Text("Font Style", style: TextStyle(color: Colors.white38, fontSize: 12)),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 40,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: fontsToUse.length,
-            itemBuilder: (context, index) {
-              final font = fontsToUse[index];
-              final isSelected = layer.fontFamily == font;
-              return GestureDetector(
-                onTap: () => widget.onFontChanged(font),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.white : Colors.white10,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                      "Abc",
-                      style: GoogleFonts.getFont(
-                          font,
-                          color: isSelected ? Colors.black : Colors.white,
-                          fontSize: 16
-                      )
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-
-        const SizedBox(height: 20),
-
-        // 5. Size Slider
-        Row(
-          children: [
-            const Text("Size", style: TextStyle(color: Colors.white, fontSize: 12)),
-            Expanded(
-              child: Slider(
-                value: layer.fontSize,
-                min: 10,
-                max: 100,
-                activeColor: Colors.white,
-                inactiveColor: Colors.white24,
-                onChanged: widget.onSizeChanged,
+          // 2. Text Input (Hidden for Date)
+          if (!layer.isDateElement)
+            TextField(
+              controller: _textEditingController,
+              onChanged: widget.onTextChanged,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white10,
+                prefixIcon: const Icon(Icons.edit, color: Colors.white54),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
               ),
             ),
-            Text(layer.fontSize.toInt().toString(), style: const TextStyle(color: Colors.white)),
+
+          // 3. Orientation Toggle (Only for Date)
+          if (layer.isDateElement)
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(8)
+              ),
+              child: Row(
+                children: [
+                  Expanded(child: _buildToggleOption("Horizontal", !layer.isVertical)),
+                  Expanded(child: _buildToggleOption("Vertical", layer.isVertical)),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 10),
+
+          // 4. Font Selector (HIDDEN FOR DATE)
+          if (!layer.isDateElement) ...[
+            const Text("Font Style", style: TextStyle(color: Colors.white, fontSize: 12)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 55,
+              child: Scrollbar(
+                thumbVisibility: true,
+                thickness: 3,
+                radius: const Radius.circular(4),
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: fontsToUse.length,
+                  itemBuilder: (context, index) {
+                    final font = fontsToUse[index];
+                    final isSelected = layer.fontFamily == font;
+                    return GestureDetector(
+                      onTap: () => widget.onFontChanged(font),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.white : Colors.white10,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                            "Abc",
+                            style: GoogleFonts.getFont(
+                                font,
+                                color: isSelected ? Colors.black : Colors.white,
+                                fontSize: 16
+                            )
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
           ],
-        ),
 
-        const SizedBox(height: 10),
+          // 5. Size Slider
+          Row(
+            children: [
+              const Text("Size", style: TextStyle(color: Colors.white, fontSize: 12)),
+              Expanded(
+                child: Slider(
+                  value: layer.fontSize,
+                  min: 10,
+                  max: 100,
+                  activeColor: Colors.blueAccent,
+                  inactiveColor: Colors.blueAccent.withOpacity(0.3),
+                  onChanged: widget.onSizeChanged,
+                ),
+              ),
+              Text(layer.fontSize.toInt().toString(), style: const TextStyle(color: Colors.white70)),
+            ],
+          ),
 
-        // 6. SIMPLIFIED COLOR PICKER
-        const Text("Color & Opacity", style: TextStyle(color: Colors.white38, fontSize: 12)),
-        const SizedBox(height: 10),
+          const SizedBox(height: 10),
 
-        SimpleColorPicker(
-          selectedColor: layer.color,
-          onColorChanged: widget.onColorChanged,
-        ),
+          // 6. SIMPLIFIED COLOR PICKER
+          const Text("Color & Opacity", style: TextStyle(color: Colors.white, fontSize: 12)),
+          const SizedBox(height: 10),
 
-        const SizedBox(height: 50),
-      ],
+          SimpleColorPicker(
+            selectedColor: layer.color,
+            onColorChanged: widget.onColorChanged,
+          ),
+
+          const SizedBox(height: 50),
+        ],
+      ),
     );
   }
 
@@ -263,10 +268,10 @@ class _SmartTextPanelState extends State<SmartTextPanel> {
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-            color: isActive ? Colors.white24 : Colors.transparent,
+            color: isActive ? Colors.black : Colors.transparent,
             borderRadius: BorderRadius.circular(6)
         ),
-        child: Text(label, style: TextStyle(color: isActive ? Colors.white : Colors.white54, fontWeight: FontWeight.bold)),
+        child: Text(label, style: TextStyle(color: isActive ? Colors.white : Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -356,7 +361,7 @@ class SimpleColorPicker extends StatelessWidget {
           alignment: Alignment.centerRight,
           child: Text(
             "#${selectedColor.value.toRadixString(16).toUpperCase().substring(2)}",
-            style: const TextStyle(color: Colors.white38, fontSize: 10),
+            style: const TextStyle(color: Colors.white, fontSize: 10),
           ),
         )
       ],

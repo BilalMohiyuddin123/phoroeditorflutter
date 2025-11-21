@@ -152,16 +152,34 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
-                "NOx Edit",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 40,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2.0,
-                  fontFamily: 'Orbitron',
+              RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 40,
+                    fontFamily: 'Orbitron',
+                  ),
+                  children: const [
+                    TextSpan(
+                      text: 'NOX',
+                      style: TextStyle(
+                        color: Colors.blueAccent,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2.0,
+                      ),
+                    ),
+                    TextSpan(
+                      text: 'EDITOR',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w300,
+                        letterSpacing: 2.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+
+
               const SizedBox(height: 50),
               if (_isLoading) ...[
                 const CircularProgressIndicator(color: Colors.blueAccent),
